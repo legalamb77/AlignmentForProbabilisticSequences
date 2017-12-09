@@ -1,6 +1,50 @@
 '''
 @author: Theodore Morley
 '''
+import numpy as np
+
+class state:
+    "A state for use in an HMM"
+
+    '''
+    The transition probs are a list of tuples in the format (state, probability of transition)
+    The same format applies for emission probs, (emission, probability of emission)
+    Both of these lists form probability distributions
+    '''
+    def __init__(self, transition_probs, emission_probs):
+        self.transitions = transition_probs
+        self.emissions = emission_probs
+
+    '''
+    Selects the next state to move to and returns it
+    '''
+    def step(self):
+        ts, ps = zip(*self.transitions)
+        return numpy.random.choice(ts, p=ps)
+    
+    '''
+    Returns an emission from the distribution on this state
+    '''
+    def emit(self):
+        es, ps = zip(*self.emissions)
+        return numpy.random.choice(es, p=ps)
+
+class hmm:
+
+    '''
+    In this case, the probability of emissions and transitions are defined within each state
+    '''
+    def __init__(self, s, e, pi):
+        self.states = s
+        self.emissions = e
+        self.initial_probs = pi
+
+    '''
+    Returns the most likely sequence of states, given this sequence of observations
+    '''
+    def viterbi(self, observed):
+        # for state in
+        return True
 
 '''
 Takes as input the name of the file containing the genome, and the name of the file specifying the probabilities for said genome at each position.
@@ -58,8 +102,24 @@ Input:
     query: A list of characters in the same alphabet as the genome_matrix
     score_threshold:
     n_threshold:
+Output:
+    #
 '''
 def notblast(genome_matrix, query, score_threshold, n_threshold):
     return True
 
 
+def blast(query, genome, k):
+    #Remove sequence repeats
+    #Make a k-letter word list of the query sequence
+    #List the possible matching words
+    #Organize high-scoring words into a search tree
+    #Repeat last two steps for all k letter words in query
+    #Scan the database sequences for exact matches with the remaining high-scoring wordss
+    #Extend the exact matches to high-scoring segment pair
+    #List all HSP's in the database higher than the cutoff score
+    #Check significance of HSP score
+    return True
+
+def prob_align(query, genome):
+    #
