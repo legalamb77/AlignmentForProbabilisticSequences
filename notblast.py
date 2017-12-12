@@ -3,6 +3,7 @@
 '''
 import numpy as np
 import sys
+import math
 
 class state:
     "A state for use in an HMM"
@@ -21,14 +22,14 @@ class state:
     '''
     def step(self):
         ts, ps = zip(*self.transitions)
-        return numpy.random.choice(ts, p=ps)
+        return np.random.choice(ts, p=ps)
     
     '''
     Returns an emission from the distribution on this state
     '''
     def emit(self):
         es, ps = zip(*self.emissions)
-        return numpy.random.choice(es, p=ps)
+        return np.random.choice(es, p=ps)
 
 class hmm:
 
@@ -70,9 +71,9 @@ class hmm:
         # Now we can perform the computation of the middle columns in the table
         # We start our range at 1 because we have already filled out the 0th column
         for time in range(1, len(sequence)):
-            print(time)
+            #print(time)
             for state in self.states:
-                print(state)
+                #print(state)
                 considered_values = [self.emission_probs[(state, sequence[time])]*self.check_val((state, prev_state))*vit[time-1][prev_state][0] for prev_state in vit[time-1].iterkeys()]
                 maximum_arg = max(considered_values)
                 backpointer = vit[time-1].keys()[considered_values.index(maximum_arg)]
@@ -127,45 +128,50 @@ If we use relatively small word sizes, we can find regions likely to have produc
 The emission probabilities for the match states are set to the probability distribution specified in the genome matrix.
 For simplicity, the insertion states have an emission distribution equal to the uniform distribution over the alphabet provided.
 '''
-def assemble_nodel_hmm(genome_mat, alphabet, tr, window, insertions):
+def assemble_nodel_hmm(genome_mat, alphabet, tr, insertions):
+    print("Building an hmm...")
     # tr = [match to match, match to insertion, insertion to self, insertion to match]
     # Needs to take the genome matrix, and construct the following:
     # Also needs to model the irrelevant states -- the ones that we ignore before and after the aligned query
     # States: A list of all possible states
     states = []
     matches = []
-    #insertions = []
+    insertions = []
     for i in range(len(genome_mat[alphabet[0]])):
         matches.append("m"+str(i))
-        #if i<len(genome_mat[alphabet[0]]) - 1:
-        #    insertions.append("i"+str(i))
-    states = matches#+insertions
+        if insertions:
+            if i<len(genome_mat[alphabet[0]]) - 1:
+                insertions.append("i"+str(i))
+    states = matches+insertions
     # Emissions: A list of all possible emissions (equal to the alphabet)
     emissions = list(alphabet)
     # Initial Probababilities: A uniform distribution over the match states
     pi = dict()
     for state in matches:
         pi[state] = 1.0/float(len(matches))
-    #for i_state in insertions:
-    #    pi[i_state] = 0
+    if insertions:
+        for i_state in insertions:
+            pi[i_state] = 0
     # Transition probabilities:
     transition_probs = dict()
     for i in range(len(matches)):
         if i<len(matches)-1:
             transition_probs[(matches[i],matches[i+1])] = tr[0]
-    #for i in range(len(insertions)):
-    #    transition_probs[(matches[i],insertions[i])] = tr[1]
-    #    transition_probs[(insertions[i],insertions[i])] = tr[2]
-    #    if i<len(matches)-1:
-    #        transition_probs[(insertions[i], matches[i+1])] = tr[3]
+    if insertions:
+        for i in range(len(insertions)):
+            transition_probs[(matches[i],insertions[i])] = tr[1]
+            transition_probs[(insertions[i],insertions[i])] = tr[2]
+            if i<len(matches)-1:
+                transition_probs[(insertions[i], matches[i+1])] = tr[3]
     # Emission Probabilities: 
     emission_probs = dict()
     for state in matches:
         for char in alphabet:
             emission_probs[(state, char)] = float(genome_mat[char][int(state[1])])
-    #for i_state in insertions:
-    #    for char in alphabet:
-    #        emission_probs[(i_state,char)] = 1.0/len(alphabet)
+    if insertions:
+        for i_state in insertions:
+            for char in alphabet:
+                emission_probs[(i_state,char)] = 1.0/len(alphabet)
     return hmm(states, emissions, pi, transition_probs, emission_probs)
 
 def ungapped_eval(start, stop, aligned, score, genome_mat):
@@ -177,13 +183,66 @@ def ungapped_eval(start, stop, aligned, score, genome_mat):
     return val
 
 '''
+score: (match, mismatch, gap_open, gap_general)
+'''
+def gapped_eval(start, aligned, score, genome_mat):
+    val = 0.0
+    pos = start
+    ingap = False
+    for char in aligned:
+        if not ingap and char == "_":
+            ingap = True
+            val += score[2]
+        elif ingap and char != "_":
+            ingap = False
+        if ingap:
+            val += score[3]
+        else:
+            val += score[0]*genome_mat[char][pos] + score[1]*(1-genome_mat[char][pos])
+        pos+=1
+    return val
+
+def mutate(genome_mat, query, start_g, position, fshift):
+    num=1
+    if fshift:
+        num=3
+    for i in range(num):
+        query.insert(position, "_")
+    start_g = max(0, start_g-num)
+    stop = start_g+len(query)
+    return (query, start_g, stop)
+
+'''
 Performs a heuristic alignment between a query sequence and a genome, based off a given matched zone.
 Uses a simulated annealing technique in order to approximate a good alignment, taking the best move at any state and storing that configuration, before
 randomly adjusting according to the acceptance probability function
+Input:
+    genome_mat:
+    q_seq:
+    scoring: (Match, mismatch, gap_open, gap_general)
+    gap_probs: [Probability of len(3) gap, probability of len(1) gap]
 '''
-def align(A_seq, B_seq, scoring):
-    alignment[['a']['b']]
-    return (0, alignment)
+def anneal_align(genome_mat, q_seq, scoring, gap_probs, start, T):
+    # On each step mutate the alignment by adding either a 3 length gap or a 1 length gap (w/probability defined by gap probs)
+    # This is uniformly distributed across positions in the alignment
+    # If the resulting score is better, take it, store it, and continue
+    # If it is worse, accept it with probability e^(-d/T), where d is (oldscore-newscore), and T is the temperature parameter.
+    print("Performing annealing alignment...")
+    temperature = True
+    q_seq = list(q_seq)
+    current_best = (ungapped_eval(start, start+len(q_seq), q_seq, scoring, genome_mat), q_seq[:])
+    while temperature:
+        possible_slots = [1.0/float(len(q_seq)) for x in q_seq]
+        pick = np.random.choice(np.arange(start, start+len(q_seq)), p=possible_slots)
+        gapThree = np.random.choice([True, False], p=gap_probs)
+        candidate = mutate(genome_mat, q_seq, start, pick-start, gapThree)
+        candidate_score = gapped_eval(candidate[1], candidate[0], scoring, genome_mat)
+        if candidate_score > current_best[0]:
+            current_best = (candidate_score, candidate)
+        else:
+            temperature = math.exp(-(current_best[0]-candidate_score)/float(T))>np.random.random_sample()
+            T-=0.1
+    return current_best
 
 '''
 Input:
@@ -251,40 +310,61 @@ def n_best_ungapped(genome_mat, sequence, n, k, score):
                         check+=1
     return nbest#sorted(considered, key=lambda x: x[0])[len(considered)-n:]
 
-def full_search(genome_file, probs_file, query_file, alphabet, initial_n, initial_k, scoring, insertions, tr_probs, hmm_window, hmm_n):
+def full_search(genome_file, probs_file, query_file, res_file, alphabet, initial_n, initial_k, scoring, insertions, tr_probs, hmm_window, hmm_n, gap_probs, temp):
     print("Beginning search...")
     # First, assemble the genome matrix from the provided files
     genome_mat = load_data(genome_file, probs_file, alphabet)
     # Second, read in the query string
     qf = open(query_file, 'r')
-    query = qf.read()
+    query = qf.read().rstrip()
     qf.close()
     # Next narrow our search space using a heuristic gapless alignment with initial n and k
     nbest = n_best_ungapped(genome_mat, query, initial_n, initial_k, scoring)
     # Then create simplified HMM's in a predefined window size around the initial promising regions. Insertions are optionally modelled, but deletions are not.
     hmms = []
     for candidate in nbest:
-        window = #TODO
-        hmms.append((assemble_nodel_hmm(genome_mat, alphabet, tr_probs, window, insertions)), window)
-    # Run the viterbi algorithm on each HMM for the query sequence
+        small_genome_mat = dict()
+        start = max(candidate[1][0]-hmm_window, 0)
+        stop = min(candidate[1][1]+hmm_window, len(genome_mat[alphabet[0]]))
+        for char in alphabet:
+            small_genome_mat[char] = genome_mat[char][start:stop]
+        window = candidate[1]
+        hmms.append((assemble_nodel_hmm(small_genome_mat, alphabet, tr_probs, insertions), window))
+    # Run the viterbi algorithm on each HMM for the query sequence and score the output
     candidate_alignments = []
     for hmm, wind in hmms:
-        candidate_alignments.append((hmm.viterbi(query),wind))
+        vit_res = hmm.viterbi(query)
+        ung_score = ungapped_eval(wind[0], wind[1], query, scoring, genome_mat)
+        candidate_alignments.append((vit_res, wind, ung_score))
     # After that, select the best of the hmm outputs (using hmm_n), and build gapped alignments using simulated annealing techniques
-    # Finally, report the best of the gapped alignments as our final score
+    best_hmm = sorted(candidate_alignments, key = lambda x:x[2], reverse=True)[:hmm_n]
+    # Use this to replace the candidate alignments
+    gapped_alignments = []
+    for c_hmm in best_hmm:
+        gapped_alignments.append(anneal_align(genome_mat, query, scoring, gap_probs, c_hmm[1][0], temp))
+    # Finally, report the best of the gapped alignments as our final score, and write the results to the specified file.
+    gapped_alignments = sorted(gapped_alignments, key = lambda x: x[0], reverse=True)
+    out = open(res_file, 'w')
+    for a in gapped_alignments:
+        out.write("Result:\n")
+        for item in a:
+            out.write(str(item)+"\n")
+        out.write("\n\n")
+    return gapped_alignments[0]
     print("Search complete!")
 
 if __name__ == "__main__":
-    print('test')
     alph = ['A','T','G','C']
     t = [0.9, 0.1, 0.7, 0.3]
-    genome_matrix = load_data(sys.argv[1],sys.argv[2],alph)
-    for v in n_best_ungapped(genome_matrix, 'AAAGGTTCCATCGAAAACCCGGGATCAAACCCTTTTTTGGAGGAGGAGGTAC', 3, 8, (5, -4)):
-        print(v)
+    gp = [0.99, 0.01]
+    #genome_matrix = load_data(sys.argv[1],sys.argv[2],alph)
+    #for v in n_best_ungapped(genome_matrix, 'AAAGGTTCCATCGAAAACCCGGGATCAAACCCTTTTTTGGAGGAGGAGGTAC', 3, 8, (5, -4)):
+    #    print(v)
     #hmm = assemble_nodel_hmm(genome_matrix, alph, t)
     #print(hmm.viterbi('CC'))
     #gf = open(sys.argv[1])
     #text = gf.read()
     #gf.close()
     #make_k_list(text, 8)
+    full_search(sys.argv[1], sys.argv[2], "query.txt","fullres.txt", alph, 3, 6, (5, -4, -5, -1), False, t, 100, 3, gp, 25)
 
