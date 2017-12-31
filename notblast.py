@@ -230,19 +230,23 @@ def anneal_align(genome_mat, q_seq, scoring, gap_probs, start, T):
     print("Performing annealing alignment...")
     temperature = True
     q_seq = list(q_seq)
-    current_best = (ungapped_eval(start, start+len(q_seq), q_seq, scoring, genome_mat), q_seq[:])
+    current_best =final_best= (ungapped_eval(start, start+len(q_seq), q_seq, scoring, genome_mat), (q_seq[:], start, start+len(q_seq)))
     while temperature:
         possible_slots = [1.0/float(len(q_seq)) for x in q_seq]
         pick = np.random.choice(np.arange(start, start+len(q_seq)), p=possible_slots)
         gapThree = np.random.choice([True, False], p=gap_probs)
-        candidate = mutate(genome_mat, q_seq, start, pick-start, gapThree)
+        candidate = mutate(genome_mat, current_best[1][0], start, pick-start, gapThree)
         candidate_score = gapped_eval(candidate[1], candidate[0], scoring, genome_mat)
         if candidate_score > current_best[0]:
             current_best = (candidate_score, candidate)
         else:
             temperature = math.exp(-(current_best[0]-candidate_score)/float(T))>np.random.random_sample()
-            T-=0.1
-    return current_best
+            T-=.1
+            if temperature:
+                current_best = (candidate_score, candidate)
+        if current_best[0] > final_best[0]:
+            final_best = current_best
+    return final_best
 
 '''
 Input:
@@ -310,6 +314,10 @@ def n_best_ungapped(genome_mat, sequence, n, k, score):
                         check+=1
     return nbest#sorted(considered, key=lambda x: x[0])[len(considered)-n:]
 
+def getNum(viterbi_result):
+    val = viterbi_result[0][0][1:]
+    return int(val)
+
 def full_search(genome_file, probs_file, query_file, res_file, alphabet, initial_n, initial_k, scoring, insertions, tr_probs, hmm_window, hmm_n, gap_probs, temp):
     print("Beginning search...")
     # First, assemble the genome matrix from the provided files
@@ -328,16 +336,17 @@ def full_search(genome_file, probs_file, query_file, res_file, alphabet, initial
         stop = min(candidate[1][1]+hmm_window, len(genome_mat[alphabet[0]]))
         for char in alphabet:
             small_genome_mat[char] = genome_mat[char][start:stop]
-        window = candidate[1]
-        hmms.append((assemble_nodel_hmm(small_genome_mat, alphabet, tr_probs, insertions), window))
+        hmmres = assemble_nodel_hmm(small_genome_mat, alphabet, tr_probs, insertions)
+        window = (start, stop)
+        hmms.append((hmmres, window))
     # Run the viterbi algorithm on each HMM for the query sequence and score the output
     candidate_alignments = []
     for hmm, wind in hmms:
         vit_res = hmm.viterbi(query)
-        ung_score = ungapped_eval(wind[0], wind[1], query, scoring, genome_mat)
-        candidate_alignments.append((vit_res, wind, ung_score))
+        ung_score = ungapped_eval(wind[0]+getNum(vit_res), len(vit_res[0][0])+getNum(vit_res), query, scoring, genome_mat)
+        candidate_alignments.append((vit_res, (wind[0]+getNum(vit_res), len(vit_res[0][0])+getNum(vit_res)), ung_score))
     # After that, select the best of the hmm outputs (using hmm_n), and build gapped alignments using simulated annealing techniques
-    best_hmm = sorted(candidate_alignments, key = lambda x:x[2], reverse=True)[:hmm_n]
+    best_hmm = sorted(candidate_alignments, key = lambda x:x[0][1], reverse=True)[:hmm_n]
     # Use this to replace the candidate alignments
     gapped_alignments = []
     for c_hmm in best_hmm:
@@ -357,14 +366,5 @@ if __name__ == "__main__":
     alph = ['A','T','G','C']
     t = [0.9, 0.1, 0.7, 0.3]
     gp = [0.99, 0.01]
-    #genome_matrix = load_data(sys.argv[1],sys.argv[2],alph)
-    #for v in n_best_ungapped(genome_matrix, 'AAAGGTTCCATCGAAAACCCGGGATCAAACCCTTTTTTGGAGGAGGAGGTAC', 3, 8, (5, -4)):
-    #    print(v)
-    #hmm = assemble_nodel_hmm(genome_matrix, alph, t)
-    #print(hmm.viterbi('CC'))
-    #gf = open(sys.argv[1])
-    #text = gf.read()
-    #gf.close()
-    #make_k_list(text, 8)
-    full_search(sys.argv[1], sys.argv[2], "query.txt","fullres.txt", alph, 3, 6, (5, -4, -5, -1), False, t, 100, 3, gp, 25)
+    full_search(sys.argv[1], sys.argv[2], "query.txt","fullres_3word15.txt", alph, 6, 15, (5, -4, -3, -1), True, t, 200, 6, gp, 20)
 
