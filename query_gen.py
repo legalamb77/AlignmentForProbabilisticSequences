@@ -43,6 +43,29 @@ def deletion(prob):
     else:
         return True
 
+def markDeletions(prob, characters):
+    toDelete = set()
+    for i in range(len(characters)):
+        if np.random.random_sample()<prob:
+            if np.random.random_sample()<0.01:
+                #1 delete
+                toDelete.add(i)
+            else:
+                toDelete.add(i)
+                if i>=0:
+                    toDelete.add(i-1)
+                if i<len(characters):
+                    toDelete.add(i+1)
+    return toDelete
+
+def deleteMany(prob, positions, characters):
+    toreturn = []
+    toDel = markDeletions(prob, characters)
+    for i in range(len(characters)):
+        if i not in toDel:
+            toreturn.append(characters[i])
+    return toreturn
+
 def substitution(el, prob):
     if np.random.random_sample() < prob:
         return np.random.choice(alph)
@@ -86,7 +109,7 @@ def main():
             if insertion(insert):
                 queries[i].insert(j, np.random.choice(alph))
         #deletions
-        queries[i] = [x for x in queries[i] if deletion(delete)]
+        queries[i] = deleteMany(delete, [posit for posit in range(len(queries[i]))], queries[i])#[x for x in queries[i] if deletion(delete)]
         #substitutions
         queries[i] = [substitution(x, sub) for x in queries[i]]
     out = open("query.txt", "w")

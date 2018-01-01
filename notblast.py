@@ -318,14 +318,14 @@ def getNum(viterbi_result):
     val = viterbi_result[0][0][1:]
     return int(val)
 
-def full_search(genome_file, probs_file, query_file, res_file, alphabet, initial_n, initial_k, scoring, insertions, tr_probs, hmm_window, hmm_n, gap_probs, temp):
+def full_search(genome_file, probs_file, query, res_file, alphabet, initial_n, initial_k, scoring, insertions, tr_probs, hmm_window, hmm_n, gap_probs, temp):
     print("Beginning search...")
     # First, assemble the genome matrix from the provided files
     genome_mat = load_data(genome_file, probs_file, alphabet)
     # Second, read in the query string
-    qf = open(query_file, 'r')
-    query = qf.read().rstrip()
-    qf.close()
+    #qf = open(query_file, 'r')
+    #query = qf.read().rstrip()
+    #qf.close()
     # Next narrow our search space using a heuristic gapless alignment with initial n and k
     nbest = n_best_ungapped(genome_mat, query, initial_n, initial_k, scoring)
     # Then create simplified HMM's in a predefined window size around the initial promising regions. Insertions are optionally modelled, but deletions are not.
@@ -366,5 +366,11 @@ if __name__ == "__main__":
     alph = ['A','T','G','C']
     t = [0.9, 0.1, 0.7, 0.3]
     gp = [0.99, 0.01]
-    full_search(sys.argv[1], sys.argv[2], "query.txt","fullres_3word15.txt", alph, 6, 15, (5, -4, -3, -1), True, t, 200, 6, gp, 20)
+    qf = open("query.txt", 'r')
+    count = 0
+    for line in qf:
+        query = line.rstrip()
+        full_search(sys.argv[1], sys.argv[2], query,"fullres"+str(count)+".txt", alph, 6, 15, (5, -4, -3, -1), True, t, 200, 6, gp, 20)
+        count += 1
+    qf.close()
 
