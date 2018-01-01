@@ -56,32 +56,50 @@ def main():
     sub = float(sys.argv[4])
     insert = float(sys.argv[5])
     delete = float(sys.argv[6])
+    num_queries = int(sys.argv[7])
     g_mat = load_data(genome_file, prob_file, alph)
     positions = np.arange(len(g_mat[alph[0]]))
-    start = np.random.choice(positions)
-    current = start
-    query = []
-    for i in range(length):
-        pro = []
-        for char in alph:
-            pro.append(g_mat[char][current])
-        query.append(np.random.choice(alph,p=pro))
-        current+=1
+    starts = []
+    for i in range(num_queries):
+        starts.append(np.random.choice(positions))
+    queries = []
+    for i in range(num_queries):
+        query = []
+        current = starts[i]
+        for i in range(length):
+            pro = []
+            for char in alph:
+                pro.append(g_mat[char][current])
+            query.append(np.random.choice(alph,p=pro))
+            current+=1
+        queries.append(query)
+    #Write unmutated
+    out3 = open("unmutated.txt", "w")
+    for i in range(len(queries)):
+        for char in queries[i]:
+            out3.write(char)
+        out3.write(", "+str(starts[i]))
+        out3.write("\n")
     #insertions
-    for i in range(len(query)):
-        if insertion(insert):
-            query.insert(i, np.random.choice(alph))
-    #deletions
-    query = [x for x in query if deletion(delete)]
-    #substitutions
-    query = [substitution(x, sub) for x in query]
+    for i in range(len(queries)):
+        for j in range(len(queries[i])):
+            if insertion(insert):
+                queries[i].insert(j, np.random.choice(alph))
+        #deletions
+        queries[i] = [x for x in queries[i] if deletion(delete)]
+        #substitutions
+        queries[i] = [substitution(x, sub) for x in queries[i]]
     out = open("query.txt", "w")
-    for char in query:
-        out.write(char)
+    for i in range(len(queries)):
+        for q in queries[i]:
+            for char in q:
+                out.write(char)
+        out.write("\n")
     out.close()
-    out2 = open("params.txt", "w")
-    out2.write(str(start))
-    out2.close()
+    #out2 = open("params.txt", "w")
+    #for i in range(num_queries):
+    #    out2.write(str(starts[i])+"\n")
+    #out2.close()
     print(len(g_mat[alph[0]]))
 
 if __name__ == "__main__":
