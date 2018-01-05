@@ -8,6 +8,8 @@
 \usepackage{textcomp}
 \usepackage{tikz}
 
+\graphicspath{/}
+
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \begin{document} 
@@ -242,7 +244,7 @@ The main workflow of the algorithm is as follows:
 	
 	In order to explore the surrounding positions chosen by the HMM's, the HMM's whose found path had the highest likelihood were chosen for further analysis, and the following process was chosen as a way to explore the surrounding space of possible gapped alignments that could be built from the ungapped alignment.
 	
-	The ungapped alignment produced by the HMM is taken, and is progressively mutated by adding gaps, in order to try and find better alignments. Gaps are inserted as either gaps of three, or gaps of one, and in the testing of this algorithm, the probability of a three gap was set at .99, while a length-one gap was set at .01, in order to represent the relative rarity of frame shift mutations(CITATION).
+	The ungapped alignment produced by the HMM is taken, and is progressively mutated by adding gaps, in order to try and find better alignments. Gaps are inserted as either gaps of three, or gaps of one, and in the testing of this algorithm, the probability of a three gap was set at .99, while a length-one gap was set at .01, in order to represent the relative rarity of frame shift mutations.
 	
 	At each step, a candidate sequence is produced by adding one of these mutations -- If the resulting sequence is found to be higher scoring than the current best alignment at this position, it is accepted as the new current best, and mutation continued.
 	
@@ -339,6 +341,91 @@ In order to test the algorithm, segments of varying length were randomly sampled
 	Word Length 15:    &  C & A  & C  \\ \hline
 	\end{tabular}
 	\end{table}
+
+\section{\textbf{Overlap Testing}}
+    
+    \subsection{\textbf{Experimental Design}}
+
+    In order to further test the algorithm, a larger batch of queries were generated in a similar manner to the earlier queries.
+     However, these new queries were generated with an additional layer of complexity in regards to deletions.
+
+     Instead of a deletion occurring on a single character in the query string, deletions of length three were prioritized. 
+     This served to more accurately model a system where single nucleotide deletions -- casuing frame shifts -- are much rarer in sequences produced over time.
+
+     If a deletion event triggered on a nucleotide, there was a one percent chance of a single character deletion occurring, and a three nucleotide deletion always occurred otherwise.
+
+    For this experiment, sixty query sequences were generated from random positions within the source genome, and then they were mutated with one percent rates per nucleotide for insertions, deletions, and substitutions. 
+    These query sequences were of length 90, and the nucleotides in the sequences were generated according to the probability distributions given in the genome.
+
+    Next, each of these sequences were run through the proposed algorithm, and the results were stored.
+
+    The chosen positions by the algorithm's alignment were compared to the original positions in the generated query, and the percent overlap between the two was calculated.
+
+    Two measures of the overlap were used: 
+    First the overlap of all returned alignments for a specific query were averaged and reported, and next, the highest overlap for each query was found and reported for each one. Afterwards, the averages for both of these were calculated.
+
+    The settings used on the algorithm for these experiment were as follows:
+
+    The word size was fifteen, the top six results were returned for the k-length matching and the HMM alignment, and insertions were modelled in the HMM.
+
+    The transition probabilities used for the HMM generation were:
+    
+    \begin{itemize}
+    
+        \item Match to Match: .9
+
+        \item Match to Insertion: .1
+
+        \item Insertion to Self: .7
+
+        \item Insertion to Match: .3
+
+    \end{itemize}
+
+    The scores used for alignment evaluation were:
+    
+    \begin{itemize}
+        \item Match: 5
+
+        \item Mismatch: -4
+
+        \item Gap Opening Penalty: -3
+
+        \item Gap General Penalty: -1
+    \end{itemize}
+
+    For the simulated annealing step, a starting temperature of twenty was used, and three length gaps were inserted with probability of .99, while one length gaps were inserted with a probability of .01.
+
+    \subsection{\textbf{Data}}
+
+    Presented in the graph below are the results on query sequences labelled 1 through 60, for both the averaged overlap measure, and the maximum overlap measure.
+
+    \includegraphics[width=0.45\textwidth]{overlapchart}
+
+    Additionally, the mean overlap for the averaged overlap measure was 4.9 percent.
+
+    The mean overlap for the maximum overlap measure was 10.4 percent.
+
+    \subsection{\textbf{Discussion}}
+
+    One can quickly see in the above plot that there was a significant portion of queries in which no overlap was found.
+
+    In these cases, it is likely that many of them failed to find any overlap due to the original k-length ungapped alignments failing to identify the correct area in the initial search.
+
+    However, this is not true in all of these cases -- in some of them, the alignment is not correct, but is relatively close (Within 200 nucleotides) of the correct starting position.
+
+    Otherwise, it can be seen that there are a significant number of queries for which overlaps were found. 
+    The maximum overlap was generally significantly higher than the overlap of the other alignments produced, which is logical, given that the highest scoring area has many similar sequences which are quite distant from it, meaning that other similar areas could have no overlap at all.
+
+    Additionally, the relatively large number of results with a small proportion of overlap suggests that the alignment step is not accurately aligning the sequence, but is still locating the original location of the query strings in the initial search.
+
+    This means that a portion of the results listed with zero overlap were not in fact totally inaccurate, but certain steps during the pipeline resulted in an inaccurate alignment around the location.
+
+    Even with that issue, a large number of alignments had overlap with the original query.
+    
+    In fact, $42\%$ of the queries returned a nonzero overlap value, meaning that some portion of the query sequence was within the final alignment, which is a fairly significant result.
+
+    Overall, the algorithm has not returned a reliable result under these settings, but it has certainly performed above chance at identifying these locations, and the techniques used in the algorithm could be adapted in other formats.
 	
 	
 \section{\textbf{Discussion}}
